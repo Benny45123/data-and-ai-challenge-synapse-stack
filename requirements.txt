@@ -1,0 +1,37 @@
+# API
+fastapi==0.111.0
+uvicorn[standard]==0.30.1
+pydantic==2.7.2
+pydantic-settings==2.3.0
+
+# Vector DB
+pinecone==4.1.0
+
+# Embeddings & NLP
+sentence-transformers==3.0.1
+torch==2.3.1
+transformers==4.41.2
+nltk==3.8.1
+rank-bm25==0.2.2
+
+# Learning to Rank
+lightgbm==4.3.0
+scikit-learn==1.5.0
+shap==0.45.1
+numpy==1.26.4
+
+# LLM
+anthropic==0.28.0
+
+# Storage / Caching
+redis==5.0.6
+asyncpg==0.29.0
+
+# Observability
+prometheus-fastapi-instrumentator==7.0.0
+structlog==24.2.0
+
+# Utilities
+python-dotenv==1.0.1
+httpx==0.27.0
+tenacity==8.3.0
