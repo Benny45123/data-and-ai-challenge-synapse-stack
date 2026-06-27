@@ -1,0 +1,7 @@
+[project]
+name = "data-and-ai-challenge-synapse-stack"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = []
