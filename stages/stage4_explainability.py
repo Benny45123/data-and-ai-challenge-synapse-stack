@@ -13,7 +13,7 @@ import logging
 import re
 from typing import Dict, List, Optional, Tuple
 
-import anthropic
+from groq import AsyncGroq
 
 from config import get_settings
 from models.schemas import CandidateProfile, JobDescription, LTRFeatureVector
@@ -201,14 +201,16 @@ async def generate_fit_summary(
     prompt = _build_prompt(verified, jd)
 
     try:
-        client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
-        message = await client.messages.create(
+        client = AsyncGroq(api_key=settings.GROQ_API_KEY)
+        response = await client.chat.completions.create(
             model=settings.LLM_MODEL,
             max_tokens=settings.LLM_MAX_TOKENS,
-            system=_SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": prompt}],
+            messages=[
+                {"role": "system", "content": _SYSTEM_PROMPT},
+                {"role": "user", "content": prompt},
+            ],
         )
-        raw_summary = message.content[0].text.strip()
+        raw_summary = response.choices[0].message.content.strip()
     except Exception as exc:
         log.error("LLM API error for candidate %s: %s", candidate.candidate_id, exc)
         raw_summary = (
