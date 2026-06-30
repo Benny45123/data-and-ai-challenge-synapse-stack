@@ -15,9 +15,9 @@ class Settings(BaseSettings):
     PINECONE_INDEX_NAME: str = "redrob-candidates"
     PINECONE_REGION: str = "us-east-1"
 
-    # ── LLM ───────────────────────────────────────────────────────────────────
-    ANTHROPIC_API_KEY: str
-    LLM_MODEL: str = "claude-haiku-4-5"
+    # ── LLM (Groq) ────────────────────────────────────────────────────────────
+    GROQ_API_KEY: str
+    LLM_MODEL: str = "llama-3.1-8b-instant"   # fast + cheap; swap to mixtral-8x7b-32768 for quality
     LLM_MAX_TOKENS: int = 512
 
     # ── Embedding / Cross-encoder models ──────────────────────────────────────
