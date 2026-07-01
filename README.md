@@ -27,19 +27,19 @@ These are unedited terminal captures from the actual submission run (`scripts/ra
 
 **1 · Pipeline boots and loads the dataset**
 
-<img src="assets/proof_03_final_ranking.png" width="850">
+<img src="assets/proof_01_pipeline_start.png" width="850">
 
 *Reads `candidates.jsonl` (487.3 MB), loads all 100,000 candidates in 8.3s, and starts Stage 1.*
 
 **2 · Honeypot detection removes trap profiles**
 
-<img src="assets/proof_01_pipeline_start.png" width="850">
+<img src="assets/proof_02_stage_progress.png" width="850">
 
 *Stage 1 flags 80 honeypots → 99,920 clean candidates remain (4.3s), then Stage 2 starts building the TF‑IDF index over descriptions.*
 
 **3 · Final ranked output**
 
-<img src="assets/proof_02_stage_progress.png" width="850">
+<img src="assets/proof_03_final_ranking.png" width="850">
 
 *Full run: 100,000 candidates in → 100 ranked candidates out, complete pipeline in ~284.6s (under the 5‑minute evaluation limit), written to `submission.csv`.*
 
