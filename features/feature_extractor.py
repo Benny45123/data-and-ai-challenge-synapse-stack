@@ -256,3 +256,179 @@ def extract_features(
         linkedin_connected=candidate.linkedin_connected,
         profile_age_days=candidate.profile_age_days,
     )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Real hackathon schema handler
+# Maps the actual candidates.jsonl schema → LTRFeatureVector
+# ─────────────────────────────────────────────────────────────────────────────
+
+def extract_features_from_raw(
+    candidate: dict,
+    bm25_score: float = 0.0,
+    dense_cosine_sim: float = 0.0,
+    rrf_score: float = 0.0,
+    cross_encoder_score: float = 0.0,
+    tfidf_score: float = 0.0,
+) -> "LTRFeatureVector":
+    """
+    Extract LTR features from the raw hackathon candidate dict.
+
+    The real schema uses:
+      candidate["profile"]          → headline, summary, years_of_experience, etc.
+      candidate["career_history"]   → list of role dicts with description
+      candidate["skills"]           → list of {name, proficiency, endorsements, duration_months}
+      candidate["redrob_signals"]   → the 23 behavioral signals
+      candidate["education"]        → list of education dicts
+
+    This replaces the simplified CandidateProfile schema for batch ranking.
+    """
+    import math
+    from datetime import date, datetime
+
+    TODAY = date(2026, 6, 30)
+
+    profile = candidate.get("profile", {})
+    signals = candidate.get("redrob_signals", {})
+    career = candidate.get("career_history", [])
+    skills_list = candidate.get("skills", [])
+    education = candidate.get("education", [])
+
+    # ── Career trajectory ──────────────────────────────────────────────────
+    career_desc = " ".join(e.get("description", "") for e in career)
+    relevant_yoe, avg_tenure, gap_months, velocity = compute_tenure_stats_raw(career, TODAY)
+    production_count = count_production_systems(
+        [type("E", (), {"description": e.get("description", "")})() for e in career]
+    )
+
+    # ── Archetype (shipper) score from descriptions ────────────────────────
+    archetype_score = compute_archetype_score(career_desc)
+
+    # ── Skill overlap using real skills list ───────────────────────────────
+    skill_names = [s.get("name", "") for s in skills_list]
+    from features.description_scorer import _PROD_RE
+    prod_hits = sum(1 for r in _PROD_RE if r.search(career_desc))
+    skill_overlap_ratio = min(1.0, prod_hits / 10.0)
+    skill_depth_score = min(1.0, prod_hits / 12.0)
+
+    # ── Behavioral signals (Group B) ───────────────────────────────────────
+    rr = float(signals.get("recruiter_response_rate", 0.5))
+    response_time = float(signals.get("avg_response_time_hours", 24.0))
+    log_response_time = math.log1p(response_time)
+    icr = float(signals.get("interview_completion_rate", 0.8))
+
+    try:
+        last_active = date.fromisoformat(signals.get("last_active_date", "2025-01-01"))
+        days_inactive = (TODAY - last_active).days
+    except ValueError:
+        days_inactive = 180
+
+    profile_completeness = float(signals.get("profile_completeness_score", 70)) / 100.0
+
+    gh = float(signals.get("github_activity_score", -1))
+    github_score = (gh / 100.0) if gh >= 0 else 0.0
+
+    # Skill assessment: average score across all completed assessments
+    assessments = signals.get("skill_assessment_scores", {})
+    assessment_pct = (
+        sum(assessments.values()) / len(assessments) / 100.0
+        if assessments else 0.5
+    )
+
+    # ── Profile age ───────────────────────────────────────────────────────
+    try:
+        signup = date.fromisoformat(signals.get("signup_date", "2024-01-01"))
+        profile_age_days = (TODAY - signup).days
+    except ValueError:
+        profile_age_days = 365
+
+    # ── Trust signals (Group D) ───────────────────────────────────────────
+    verified_email = bool(signals.get("verified_email", False))
+    verified_phone = bool(signals.get("verified_phone", False))
+    linkedin = bool(signals.get("linkedin_connected", False))
+
+    # ── Use tfidf_score as best proxy for semantic relevance ──────────────
+    # It replaces cross_encoder_score when CE model isn't loaded
+    effective_ce = cross_encoder_score if cross_encoder_score > 0 else tfidf_score
+
+    return LTRFeatureVector(
+        # Group A
+        bm25_score=bm25_score,
+        dense_cosine_sim=dense_cosine_sim,
+        rrf_score=rrf_score,
+        cross_encoder_score=effective_ce,
+        skill_overlap_ratio=skill_overlap_ratio,
+        skill_depth_score=skill_depth_score,
+        archetype_score=archetype_score,
+        # Group B
+        recruiter_response_rate=rr,
+        avg_response_time_hours=log_response_time,
+        interview_completion_rate=icr,
+        days_since_last_active=days_inactive,
+        profile_completeness_score=profile_completeness,
+        github_activity_score=github_score,
+        assessment_score_percentile=assessment_pct,
+        # Group C
+        total_yoe=float(profile.get("years_of_experience", 0)),
+        relevant_yoe=relevant_yoe,
+        avg_tenure_months=avg_tenure,
+        career_velocity=velocity,
+        production_system_count=production_count,
+        gap_months=gap_months,
+        # Group D
+        verified_email=verified_email,
+        verified_phone=verified_phone,
+        linkedin_connected=linkedin,
+        profile_age_days=profile_age_days,
+    )
+
+
+def compute_tenure_stats_raw(career: list, today: "date") -> tuple:
+    """
+    Same as compute_tenure_stats() but operates on raw career_history dicts
+    (real schema) rather than CareerEntry Pydantic objects.
+    """
+    from datetime import date as _date
+
+    if not career:
+        return 0.0, 0.0, 0, 0.5
+
+    tenures = []
+    ends = []
+
+    for entry in career:
+        try:
+            start = _date.fromisoformat(entry.get("start_date", "2020-01-01"))
+        except ValueError:
+            continue
+
+        raw_end = entry.get("end_date")
+        if not raw_end or entry.get("is_current", False):
+            end = today
+        else:
+            try:
+                end = _date.fromisoformat(raw_end)
+            except ValueError:
+                end = today
+
+        months = max(0, (end.year - start.year) * 12 + (end.month - start.month))
+        tenures.append(months)
+        ends.append(end)
+
+    avg_tenure = sum(tenures) / len(tenures) if tenures else 0.0
+    sorted_ends = sorted(ends)
+    gap_months = 0
+    for i in range(len(sorted_ends) - 1):
+        gap = (
+            (sorted_ends[i + 1].year - sorted_ends[i].year) * 12 +
+            (sorted_ends[i + 1].month - sorted_ends[i].month)
+        )
+        if gap > 3:
+            gap_months += gap - 3
+
+    role_count = len(career)
+    total_yoe = sum(tenures) / 12.0
+    velocity = min(1.0, role_count / max(total_yoe, 1.0) * 0.5)
+    relevant_yoe = total_yoe * 0.7
+
+    return round(relevant_yoe, 2), round(avg_tenure, 2), gap_months, round(velocity, 4)
