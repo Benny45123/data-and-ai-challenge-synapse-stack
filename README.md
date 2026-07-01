@@ -285,7 +285,7 @@ notice=30d."*
 ## 📂 Repository Structure
 
 ```
-redrob/
+data-and-ai-challenge-synapse-stack/
 ├── main.py                        # FastAPI entry-point (production API)
 ├── pipeline.py                    # Orchestrates the 4-stage cascade
 ├── config.py                      # Centralised settings (.env-driven)
