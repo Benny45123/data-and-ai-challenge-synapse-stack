@@ -43,6 +43,10 @@ These are unedited terminal captures from the actual submission run (`scripts/ra
 
 *Full run: 100,000 candidates in → 100 ranked candidates out, complete pipeline in ~284.6s (under the 5‑minute evaluation limit), written to `submission.csv`.*
 
+**4 . Submission.csv**
+
+<img src = "assets/proof_04_submission.png" width="850">
+
 > Raw log excerpt from the run:
 > ```text
 > ===========================================================
